@@ -6,8 +6,8 @@ import rasterio
 from rasterio.mask import mask
 
 # 1. Rutas de tus archivos (Usamos 'r' al inicio para evitar errores de barras '\' en Windows)
-ruta_geojson = r"..\ShapeFiles\poligonos_entrenamiento.geojson"
-carpeta_bandas = r"..\ano_1"
+ruta_geojson = r"..\ShapeFiles\poligonos_entrenamiento_grandes.geojson"
+carpeta_bandas = r"..\ano_2"
 
 # Definimos las 8 bandas que descargaste
 bandas_nombres = ["B02", "B03", "B04", "B05", "B06", "B08", "B11", "B12"]
@@ -107,7 +107,7 @@ df_final = pd.DataFrame(datos_pixeles)
 df_final = df_final.dropna()
 
 # Guardar en la misma carpeta de scripts de forma relativa
-output_path = "datos_entrenamiento_sesquile.tsv"
+output_path = "datos_entrenamiento_sesquile_finales.tsv"
 df_final.to_csv(output_path, sep='\t', index=False)
 
 print(f"\n¡Fase 1 Completada con éxito! Archivo guardado en: {output_path}")
