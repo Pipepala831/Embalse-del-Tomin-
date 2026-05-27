@@ -1,0 +1,377 @@
+\documentclass[12pt, letterpaper]{article}
+
+% --- Paquetes ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{multirow}
+
+% --- Diseño de página ---
+\geometry{
+  headheight=15pt,
+  letterpaper,
+  top=1in,
+  bottom=1in,
+  left=1.25in,
+  right=1.25in
+}
+
+% --- Configuración de hipervínculos ---
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=blue!60!black,
+  urlcolor=blue!60!black
+}
+
+% ====================================================================
+\begin{document}
+% ====================================================================
+
+% --- Título (igual al estilo del PDF de referencia) ---
+\title{\textbf{Final Project: Monitoreo de la cobertura superficial del\\
+Embalse de Tomin\'e mediante im\'agenes Sentinel-2}}
+\author{
+  Juan Diego Romero, Eduardo de Brigard, Juan Parrales, Samuel Beltrán
+}
+\date{21 de Mayo del 2026}
+\maketitle
+
+% ====================================================================
+\section{Introducci\'on}
+% ====================================================================
+
+En los \'ultimos a\~nos, el cambio clim\'atico y la actividad humana han tenido un impacto
+significativo sobre los ecosistemas h\'idricos y las coberturas terrestres de los Andes
+colombianos. Monitorear estos cambios es fundamental para comprender las consecuencias
+ambientales y su evoluci\'on con el tiempo. En este proyecto nos centramos en el
+\textbf{Embalse de Tomin\'e}, ubicado en el municipio de Guatavita, Cundinamarca, el cual
+constituye una fuente de abastecimiento h\'idrico de importancia regional.
+
+Mediante el uso del software QGIS e im\'agenes satelitales Sentinel-2 L2A, se busca analizar
+los cambios en las coberturas del suelo (agua, vegetaci\'on, zona urbana y nube ) para febrero de 2024, para clasificar y caracterizar la cobertura superficial del embalse de tomin\'e.
+
+% ====================================================================
+\section{Regi\'on de Inter\'es (ROI) y Caso de Estudio}
+% ====================================================================
+
+El caso de estudio seleccionado es el \textbf{Embalse de Tomin\'e}, ubicado en el municipio de Guatavita, departamento de Cundinamarca, Colombia. Se trata de un embalse artificial de alta monta\~na andina con un paisaje heterog\'eneo que incluye cuerpos de agua, vegetaci\'on ripariana y tejido urbano disperso. El monitoreo se concentra en el escenario de post-evento cr\'itico provocado por el Fen\'omeno de El Ni\~no en el primer trimestre de 2024.
+
+Ubicado en las coordenadas aproximadas \textbf{N\,4.99$^\circ$, O\,73.82$^\circ$} (WGS 84 / UTM zona 18N, EPSG:32618).
+
+% ====================================================================
+\section{Metodolog\'ia}
+% ====================================================================
+
+El flujo metodol\'ogico se estructur\'o de manera independiente a las herramientas tradicionales de un software GIS, utilizando un pipeline automatizado en Python para el procesamiento num\'erico y el entrenamiento de los modelos de aprendizaje supervisado.
+
+% --------------------------------------------------------------------
+\subsection{Fase 1: Definici\'on del Problema y Adquisici\'on de Datos}
+% --------------------------------------------------------------------
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Fecha de análisis:} Escenario de post-evento cr\'itico (12 de febrero de 2024).
+  \item \textbf{Fuente de datos:} Im\'agenes \'opticas multiespectrales Sentinel-2 L2A (ESA Copernicus).
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.88\textwidth]{Correccionesfase3.jpeg}
+  \caption{Panel del Navegador de QGIS mostrando las bandas Sentinel-2 L2A cargadas para el escenario post-evento (2024-02-12) y la capa vectorial de pol\'igonos de entrenamiento corregida.}
+  \label{fig:qgis_capas}
+\end{figure}
+
+Las bandas descargadas abarcan resoluciones espaciales de 10\,m (B02, B03, B04, B08) y 20\,m (B05, B06, B11, B12), en formato GeoTIFF de reflectancia superficial (Level-2A) bajo el sistema de referencia espacial WGS 84 / UTM zona 18N (EPSG:32618).
+
+La Regi\'on de Inter\'es (ROI) fue acotada geogr\'aficamente para optimizar el procesamiento computacional. Dentro de esta zona, se digitalizaron manualmente pol\'igonos de entrenamiento generosos y robustos distribuidos en \textbf{4 clases oficiales}: \texttt{agua}, \texttt{vegetacion}, \texttt{nube} y \texttt{urbano}. La clase \texttt{roca} fue descartada debido a que los suelos desnudos y las playas expuestas por la sequ\'ia presentaban una respuesta espectral que se confund\'ia con el tejido urbano, decidi\'endose agruparlos para evitar ruido en las matrices de confusi\'on.
+
+\subsubsection*{Distribuci\'on de pol\'igonos de entrenamiento}
+
+\begin{table}[H]
+  \centering
+  \caption{Pol\'igonos de entrenamiento por clase de cobertura (Dataset ampliado).}
+  \label{tab:poligonos}
+  \begin{tabular}{lcp{7cm}}
+    \toprule
+    \textbf{Clase} & \textbf{Pol\'igonos} & \textbf{Descripci\'on} \\
+    \midrule
+    agua       & 3& Cuerpos de agua abiertos y profundos en el centro del embalse \\
+    vegetacion & 4& Parches extensos de bosques andinos y pastizales \\
+    nube       & 4& \'Areas de nubosidad densa presentes en la escena \\
+    urbano     & 2& Cascos urbanos consolidados (Sesquil\'e y Guatavita) \\
+    \midrule
+    \textbf{Total} & \textbf{13}& \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+\subsubsection*{Creaci\'on del dataset -- Extracci\'on de firmas espectrales}
+
+Se desarroll\'o un script de Python (\texttt{QGIS-Numerical.py}) utilizando las librer\'ias \texttt{rasterio} y \texttt{geopandas} para automatizar la extracci\'on de firmas espectrales de los p\'ixeles puros contenidos en las geometr\'ias vectoriales. El script realiz\'o la reproyecci\'on al vuelo, el remuestreo biling\"ue de las bandas de 20\,m a 10\,m, y calcul\'o mediante la transformaci\'on af\'in las coordenadas geogr\'aficas (\texttt{EPSG:4326}) de cada celda.
+
+Como resultado del redise\~no de los pol\'igonos, se gener\'o un dataset robusto para el escenario de post-evento:
+
+\begin{table}[H]
+  \centering
+  \caption{Dataset de entrenamiento definitivo generado para el post-evento.}
+  \label{tab:datasets}
+  \begin{tabular}{lccc}
+    \toprule
+    \textbf{Archivo} & \textbf{Fecha} & \textbf{Total P\'ixeles} & \textbf{Columnas} \\
+    \midrule
+    \texttt{entrenamiento\_ano2\_2024\_final.tsv} & 2024-02-12 & 1{,}927 & 11 \\
+    \bottomrule
+  \end{tabular}
+\\
+\end{table}
+
+La distribuci\'on de las muestras garantiza un volumen m\'as adecuado de informaci\'on para mitigar el riesgo de sobreajuste (\textit{overfitting}) en la fase algor\'itmica:
+
+\begin{table}[H]
+  \centering
+  \caption{Conteo de p\'ixeles por clase de cobertura del suelo (Dataset 2024).}
+  \label{tab:clases}
+  \begin{tabular}{lrr}
+    \toprule
+    \textbf{Clase} & \textbf{P\'ixeles Extra\'idos} & \textbf{Porcentaje (\%)} \\
+    \midrule
+    vegetacion & 814  & 42.2 \\
+    agua       & 620  & 32.2 \\
+    urbano     & 298  & 15.5 \\
+    nube       & 195  & 10.1 \\
+    \midrule
+    \textbf{Total} & \textbf{1{,}927} & \textbf{100.0} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+% ====================================================================
+\section{Fase 2: Preprocesamiento y Entrenamiento de Modelos}
+% ====================================================================
+
+\subsection*{Dataset final de entrenamiento}
+
+Para la Fase 2 se consolid\'o un \'unico dataset de entrenamiento denominado
+\texttt{datos\_entre\allowbreak namiento\_ses\allowbreak quile\_finales.tsv}, compuesto por \textbf{1{,}927 registros}
+y 11 columnas (\texttt{Latitude, Longitude, B02, B03, B04, B05, B06, B08, B11, B12, clase}).
+El dataset cubre cuatro clases de cobertura del suelo, cuya distribuci\'on se presenta en la
+Tabla~\ref{tab:dataset_final}.
+
+\begin{table}[H]
+  \centering
+  \caption{Distribuci\'on de clases en el dataset final de entrenamiento.}
+  \label{tab:dataset_final}
+  \begin{tabular}{lrr}
+    \toprule
+    \textbf{Clase} & \textbf{P\'ixeles} & \textbf{\%} \\
+    \midrule
+    vegetacion & 1{,}049 & 54.44 \\
+    agua       &   746   & 38.71 \\
+    nube       &   105   &  5.45 \\
+    urbana     &    27   &  1.40 \\
+    \midrule
+    \textbf{Total} & \textbf{1{,}927} & \textbf{100} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Se observa un desbalance notable en la clase \texttt{urbana} (1.40\,\% del total), lo cual
+fue abordado mediante dos estrategias complementarias: aplicaci\'on de \textit{pesos
+inversamente proporcionales a la frecuencia de clase} en el \'Arbol de Decisi\'on, y
+\textit{upsampling autom\'atico} en el \texttt{trainControl} de \texttt{caret} para los
+modelos KNN, SVM, ANN y Naive Bayes.
+
+\subsection*{Divisi\'on train/test y normalizaci\'on}
+
+El dataset fue dividido en un 80\,\% para entrenamiento (1{,}543 registros) y un 20\,\%
+para prueba (384 registros) mediante partici\'on estratificada, garantizando que la
+proporci\'on de clases se mantuviera en ambos subconjuntos. Para los modelos sensibles a
+la escala (KNN, SVM y ANN) se aplic\'o normalizaci\'on \textit{center + scale} calculada
+sobre el conjunto de entrenamiento y aplicada al conjunto de prueba.
+
+\subsection*{Optimizaci\'on de hiperpar\'ametros (HPO)}
+
+Cada modelo fue sometido a una b\'usqueda exhaustiva de hiperpar\'ametros mediante
+\textit{GridSearchCV} con validaci\'on cruzada de 5 iteraciones (\textit{5-fold CV}).
+La Tabla~\ref{tab:hpo} resume los hiperpar\'ametros explorados y los valores \'optimos
+encontrados para cada arquitectura.
+
+\begin{table}[H]
+  \centering
+  \caption{Hiperpar\'ametros explorados y valores \'optimos por modelo.}
+  \label{tab:hpo}
+  \begin{tabular}{llll}
+    \toprule
+    \textbf{Modelo} & \textbf{Par\'ametro} & \textbf{Valores explorados} & \textbf{\'Optimo} \\
+    \midrule
+    Decision Tree & \texttt{cp}        & 0.0001, 0.001, 0.005, 0.01, 0.05, 0.1 & 0.0010 \\
+    KNN           & \texttt{k}         & 3, 5, 7, 9, 11, 15, 21, 31             & 3      \\
+    SVM           & \texttt{C}         & 0.1, 1, 10                             & 10     \\
+                  & \texttt{sigma}     & 0.01, 0.1, 1                           & 1.00   \\
+    ANN           & \texttt{size}      & 5, 10, 20                              & 20     \\
+                  & \texttt{decay}     & 0.001, 0.01, 0.1                       & 0.001  \\
+    Naive Bayes   & \texttt{usekernel} & TRUE, FALSE                            & TRUE   \\
+                  & \texttt{fL}        & 0, 0.5, 1                              & ---    \\
+                  & \texttt{adjust}    & 0.5, 1, 2                              & ---    \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection*{Resultados y m\'etricas de evaluaci\'on}
+
+La Tabla~\ref{tab:comparacion} presenta la comparaci\'on de los cinco modelos en t\'erminos
+de Exactitud Global (OA), Coeficiente Kappa y F1-Score ponderado, ordenados de mayor a
+menor rendimiento.
+
+\begin{table}[H]
+  \centering
+  \caption{Comparaci\'on de los cinco modelos -- conjunto de prueba (384 p\'ixeles).}
+  \label{tab:comparacion}
+  \begin{tabular}{lrrrl}
+    \toprule
+    \textbf{Modelo} & \textbf{OA (\%)} & \textbf{Kappa} & \textbf{F1-Score (w)} & \\
+    \midrule
+    KNN            & 98.96 & 0.9813 & 0.9910 & $\leftarrow$ \textbf{mejor} \\
+    ANN            & 98.96 & 0.9811 & 0.9899 & \\
+    SVM            & 97.40 & 0.9536 & 0.9795 & \\
+    Decision Tree  & 97.40 & 0.9532 & 0.9777 & \\
+    Naive Bayes    & 94.79 & 0.9085 & 0.9600 & \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+La Figura~\ref{fig:comparacion} muestra visualmente la comparaci\'on de las tres m\'etricas
+para los cinco modelos.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.90\textwidth]{comparacion_modelos.png}
+  \caption{Comparaci\'on de OA, Kappa y F1-Score ponderado (\%) para los cinco clasificadores
+           evaluados sobre el conjunto de prueba.}
+  \label{fig:comparacion}
+\end{figure}
+
+La Tabla~\ref{tab:metricas_clase} y la Figura~\ref{fig:f1_clase} detallan el F1-Score por
+clase y modelo, evidenciando que \texttt{agua} y \texttt{nube} son clasificadas perfectamente
+(F1\,=\,1.000) por la mayor\'ia de los modelos, mientras que \texttt{urbana} presenta el
+rendimiento m\'as bajo en todos los clasificadores debido al desbalance severo del dataset.
+
+\begin{table}[H]
+  \centering
+  \caption{F1-Score por clase y modelo.}
+  \label{tab:metricas_clase}
+  \begin{tabular}{lrrrrr}
+    \toprule
+    \textbf{Clase} & \textbf{DT} & \textbf{KNN} & \textbf{SVM} & \textbf{ANN} & \textbf{NB} \\
+    \midrule
+    agua       & 0.997 & 1.000 & 1.000 & 0.997 & 0.986 \\
+    nube       & 1.000 & 1.000 & 1.000 & 1.000 & 0.976 \\
+    urbana     & 0.400 & 0.714 & 0.444 & 0.727 & 0.385 \\
+    vegetacion & 0.976 & 0.990 & 0.976 & 0.990 & 0.953 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\textwidth]{f1_por_clase_y_modelo.png}
+  \caption{Mapa de calor del F1-Score por clase y modelo. Los tonos rojos indican bajo
+           rendimiento y los verdes indican rendimiento \'optimo. La clase \texttt{urbana}
+           concentra las mayores dificultades en todos los modelos.}
+  \label{fig:f1_clase}
+\end{figure}
+
+\subsection*{An\'alisis de las matrices de confusi\'on}
+
+La Figura~\ref{fig:cm_todas} presenta las matrices de confusi\'on de los cinco modelos
+sobre el conjunto de prueba. Se observa que los errores de clasificaci\'on se concentran
+casi exclusivamente en la clase \texttt{urbana}, donde todos los modelos presentan
+dificultades para distinguirla de \texttt{vegetacion} debido al escaso n\'umero de muestras
+de entrenamiento disponibles (27 registros).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{todas_confusion_matrices.png}
+  \caption{Matrices de confusi\'on de los cinco clasificadores. Las filas representan la
+           clase predicha y las columnas la clase real. Los valores en la diagonal
+           corresponden a clasificaciones correctas.}
+  \label{fig:cm_todas}
+\end{figure}
+
+\subsection*{An\'alisis del \'Arbol de Decisi\'on}
+
+La Figura~\ref{fig:dt_tree} muestra la estructura del \'Arbol de Decisi\'on \'optimo
+(cp\,=\,0.001). La primera partici\'on se realiza sobre la banda B06 con umbral 0.066,
+separando el agua del resto de coberturas. La segunda divisi\'on utiliza B02 para aislar
+las nubes (B02\,$\geq$\,0.22). Las ramas posteriores emplean combinaciones de B02, B03,
+B04 y B12 para discriminar entre vegetaci\'on y zona urbana.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{DT_tree_visualization.png}
+  \caption{Estructura del \'Arbol de Decisi\'on \'optimo (primeros niveles). Cada nodo
+           indica la banda y umbral de partici\'on, la clase predicha y la proporci\'on
+           de muestras en ese nodo.}
+  \label{fig:dt_tree}
+\end{figure}
+
+La Figura~\ref{fig:dt_imp} presenta la importancia relativa de cada banda espectral seg\'un
+el criterio Gini del \'Arbol de Decisi\'on. Las bandas B05 (Red Edge, 0.167) y B04 (Rojo,
+0.158) son las m\'as discriminativas, lo cual tiene fundamento f\'isico: B04 captura la
+absorci\'on de clorofila que diferencia la vegetaci\'on del resto de coberturas, mientras
+que B05 (borde del rojo) refleja variaciones en el contenido de pigmentos vegetales. La
+banda B11 (SWIR, 0.100) es la menos influyente en este dataset.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.80\textwidth]{DT_feature_importance.png}
+  \caption{Importancia relativa de las bandas espectrales Sentinel-2 seg\'un el criterio
+           Gini del \'Arbol de Decisi\'on \'optimo.}
+  \label{fig:dt_imp}
+\end{figure}
+
+\subsection*{An\'alisis del modelo KNN}
+
+La Figura~\ref{fig:knn_k} muestra la curva de Exactitud Global en funci\'on del n\'umero
+de vecinos K evaluada mediante validaci\'on cruzada. La curva es mon\'otonamente decreciente
+desde k\,=\,3 (OA\,=\,0.980) hasta k\,=\,31 (OA\,=\,0.910), lo que indica que las firmas
+espectrales de cada clase forman \textit{cl\'usters compactos y homog\'eneos} en el espacio
+espectral de 8 dimensiones. Agregar m\'as vecinos introduce ruido de clases adyacentes,
+degradando el rendimiento.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.78\textwidth]{KNN_accuracy_vs_k.png}
+  \caption{Curva de Exactitud Global vs n\'umero de vecinos K para el modelo KNN, evaluada
+           mediante validaci\'on cruzada de 5 iteraciones. La l\'inea roja discontinua
+           indica el valor \'optimo k\,=\,3.}
+  \label{fig:knn_k}
+\end{figure}
+
+\subsection*{Selecci\'on del modelo para inferencia}
+
+Con base en los resultados obtenidos, se selecciona el modelo \textbf{KNN con k\,=\,3}
+como clasificador para la inferencia final sobre el r\'aster completo. Los criterios de
+selecci\'on son:
+
+\begin{itemize}[leftmargin=2em]
+  \item Mayor Coeficiente Kappa (0.9813), m\'etrica m\'as robusta que OA en presencia de
+        desbalance de clases.
+  \item Mayor F1-Score ponderado (0.9910), que refleja el rendimiento global considerando
+        la distribuci\'on real de clases.
+  \item Recall\,=\,1.000 en la clase \texttt{urbana}, garantizando que ning\'un p\'ixel
+        urbano quede sin detectar en el mapa final.
+  \item Clasificaci\'on perfecta de \texttt{agua} y \texttt{nube} (F1\,=\,1.000).
+\end{itemize}
+
+% ====================================================================
+\end{document}
+% ====================================================================
